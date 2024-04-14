@@ -5,6 +5,7 @@ import { apiResponse } from "../utils/apiResponse.js";
 import {User} from "../models/user.model.js"
 import fs from "fs"
 import jwt from "jsonwebtoken";
+import { response } from "express";
 
 const registerUser = asyncHandler( async (req,res) =>{
     // get user details from frontend
@@ -213,4 +214,40 @@ const refreshAccessToken = asyncHandler( async (req,res) => {
     }
 })
 
-export {registerUser,loginUser,logoutUser,refreshAccessToken}
+const changeCurrentPassword = asyncHandler( async (req,res) => {
+    //get the old password, new password , confirm new password from the user
+    //user id can be obtained fom the req by auth middleware as well
+    //verify if new pass and conf new pass matches
+    //find user in the database by findandupdate method
+    //return response
+
+    try {
+        const {oldPassword , newPassword, confnewPassword} = req.body
+
+        if([oldPassword,newPassword,confnewPassword].some(field => !field || field.trim()===""))    
+            throw new apiError(400,'all fields are required')
+        if(oldPassword===newPassword || newPassword!==confnewPassword)
+            throw new apiError(400,'passwords are not valid')
+
+        const user = await User.findById(req.user._id)
+        const isMatch = await user?.isPasswordCorrect(oldPassword);
+        if(!isMatch)
+            throw new apiError(401,'wrong current password');
+        
+        user.password=newPassword;
+        await user.save({validateBeforeSave: false});
+
+        const updatedUser = await User.findById(user._id).select("-password -refreshToken")
+        res
+            .status(200)
+            .json(
+                new apiResponse(200,{user: updatedUser},"User password changed successfully")
+            )
+    } catch (error) {
+        throw new apiError(400,"Somethinh went wrong while updating password: "+error.message);
+    }
+
+
+})
+
+export {registerUser,loginUser,logoutUser,refreshAccessToken,changeCurrentPassword}
