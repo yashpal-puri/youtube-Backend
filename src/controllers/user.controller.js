@@ -1,6 +1,6 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {apiError} from "../utils/apiError.js"
-import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import {deleteFromCloudinary, uploadOnCloudinary} from "../utils/cloudinary.js"
 import { apiResponse } from "../utils/apiResponse.js";
 import {User} from "../models/user.model.js"
 import fs from "fs"
@@ -317,6 +317,7 @@ const updateUserAvatar = asyncHandler (async (req,res)=>{
             }
         ).select("-password -refreshToken")
     
+        await deleteFromCloudinary(req.user.coverImage.match(/\/upload\/v\d+\/(.+)\.\w+$/)[1]);
         res
             .status(200)
             .json(
@@ -348,16 +349,144 @@ const updateUserCoverImage = asyncHandler (async (req,res)=>{
                 new: true
             }
         ).select("-password -refreshToken")
-    
+        
+        await deleteFromCloudinary(req.user.coverImage.match(/\/upload\/v\d+\/(.+)\.\w+$/)[1]);
         res
             .status(200)
             .json(
                 new apiResponse(200,updatedUser,"user cover updated successfully")
             )
     } catch (error) {
-        throw new apiError(400, error.message);
+        throw new apiError(400, error?.message);
     }
 
+})
+const getChannelDetails = asyncHandler( async (req,res)=>{
+    try {
+        const username = req.query.username;
+        console.log(username);
+        if(!username?.trim())
+            throw new apiError(400,'Invalid channel username');
+    
+        const channelInfo = await User.aggregate([
+            {
+                $match : {
+                    username : username.toLowerCase()
+                }
+            },
+            {
+                $lookup: {
+                    from: "subscriptions",
+                    localField: "_id",
+                    foreignField: "channel",
+                    as: "subscribers"
+                }
+            },
+            {
+                $lookup: {
+                    from: "subscriptions",
+                    localField: "_id",
+                    foreignField: "subscriber",
+                    as: "subscribedTo"
+                }
+            },
+            {
+                $addFields: {
+                    subscribersCount : {
+                        $size : "$subscribers"
+                    },
+                    subscribedToCount : {
+                        $size : "$subscribedTo"
+                    },
+                    isSubscribed: {
+                        $cond: {
+                            if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+                            then: true,
+                            else: false
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    fullname: 1,
+                    username: 1,
+                    subscribersCount: 1,
+                    subscribedToCount: 1,
+                    isSubscribed: 1,
+                    avatar: 1,
+                    coverImage: 1,
+                    email: 1
+                }
+            }
+        ]) 
+
+        // const channelInfo = await User.aggregate([
+        //     {
+        //         $match: {
+        //             username: username?.toLowerCase()
+        //         }
+        //     },
+        //     {
+        //         $lookup: {
+        //             from: "subscriptions",
+        //             localField: "_id",
+        //             foreignField: "channel",
+        //             as: "subscribers"
+        //         }
+        //     },
+        //     {
+        //         $lookup: {
+        //             from: "subscriptions",
+        //             localField: "_id",
+        //             foreignField: "subscriber",
+        //             as: "subscribedTo"
+        //         }
+        //     },
+        //     {
+        //         $addFields: {
+        //             subscribersCount: {
+        //                 $size: "$subscribers"
+        //             },
+        //             channelsSubscribedToCount: {
+        //                 $size: "$subscribedTo"
+        //             },
+        //             isSubscribed: {
+        //                 $cond: {
+        //                     if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+        //                     then: true,
+        //                     else: false
+        //                 }
+        //             }
+        //         }
+        //     },
+        //     {
+        //         $project: {
+        //             fullName: 1,
+        //             username: 1,
+        //             subscribersCount: 1,
+        //             channelsSubscribedToCount: 1,
+        //             isSubscribed: 1,
+        //             avatar: 1,
+        //             coverImage: 1,
+        //             email: 1
+    
+        //         }
+        //     }
+        // ])
+    
+        if(!channelInfo.length) 
+            throw new apiError(404, "Invalid channel url")
+    
+        return res
+            .status(200)
+            .json(
+                new apiResponse(200,channelInfo[0],"Channel fetched successfully")
+            )
+        
+    } catch (error) {
+        throw new apiError("There is some error in finding channel details: ",error.message);
+    }
 })
 export {registerUser,
         loginUser,
@@ -367,5 +496,6 @@ export {registerUser,
         getCurrentUser,
         updateAccountDetails,
         updateUserAvatar,
-        updateUserCoverImage
+        updateUserCoverImage,
+        getChannelDetails
     }
