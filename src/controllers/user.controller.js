@@ -5,7 +5,7 @@ import { apiResponse } from "../utils/apiResponse.js";
 import {User} from "../models/user.model.js"
 import fs from "fs"
 import jwt from "jsonwebtoken";
-import { response } from "express";
+import mongoose from "mongoose";
 
 const registerUser = asyncHandler( async (req,res) =>{
     // get user details from frontend
@@ -363,7 +363,7 @@ const updateUserCoverImage = asyncHandler (async (req,res)=>{
 })
 const getChannelDetails = asyncHandler( async (req,res)=>{
     try {
-        const username = req.query.username;
+        const {username} = req.params;
         console.log(username);
         if(!username?.trim())
             throw new apiError(400,'Invalid channel username');
@@ -419,61 +419,7 @@ const getChannelDetails = asyncHandler( async (req,res)=>{
                     email: 1
                 }
             }
-        ]) 
-
-        // const channelInfo = await User.aggregate([
-        //     {
-        //         $match: {
-        //             username: username?.toLowerCase()
-        //         }
-        //     },
-        //     {
-        //         $lookup: {
-        //             from: "subscriptions",
-        //             localField: "_id",
-        //             foreignField: "channel",
-        //             as: "subscribers"
-        //         }
-        //     },
-        //     {
-        //         $lookup: {
-        //             from: "subscriptions",
-        //             localField: "_id",
-        //             foreignField: "subscriber",
-        //             as: "subscribedTo"
-        //         }
-        //     },
-        //     {
-        //         $addFields: {
-        //             subscribersCount: {
-        //                 $size: "$subscribers"
-        //             },
-        //             channelsSubscribedToCount: {
-        //                 $size: "$subscribedTo"
-        //             },
-        //             isSubscribed: {
-        //                 $cond: {
-        //                     if: {$in: [req.user?._id, "$subscribers.subscriber"]},
-        //                     then: true,
-        //                     else: false
-        //                 }
-        //             }
-        //         }
-        //     },
-        //     {
-        //         $project: {
-        //             fullName: 1,
-        //             username: 1,
-        //             subscribersCount: 1,
-        //             channelsSubscribedToCount: 1,
-        //             isSubscribed: 1,
-        //             avatar: 1,
-        //             coverImage: 1,
-        //             email: 1
-    
-        //         }
-        //     }
-        // ])
+        ])        
     
         if(!channelInfo.length) 
             throw new apiError(404, "Invalid channel url")
@@ -488,6 +434,59 @@ const getChannelDetails = asyncHandler( async (req,res)=>{
         throw new apiError("There is some error in finding channel details: ",error.message);
     }
 })
+const getWatchHistory = asyncHandler( async (req,res) => {
+    try {
+        const user = await User.aggregate([
+            {
+                $match: {
+                    _id: new mongoose.Types.ObjectId(req.user._id)
+                }
+            },
+            {
+                $lookup: {
+                    from: "videos",
+                    localField: "watchHistory",
+                    foreignField: "_id",
+                    as: "watchHistory",
+                    pipeline: [
+                        {
+                            $lookup: {
+                                from: "users",
+                                localField: "owner",
+                                foreignField: "_id",
+                                as: "owner",
+                                pipeline: [
+                                    {
+                                        $project: {
+                                            fullName: 1,
+                                            username:1,
+                                            avatar: 1,
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            $addFields: {
+                                owner: {
+                                    $first: "$owner"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ])
+    
+        res
+            .status(200)
+            .json(
+                new apiResponse(200,user[0].watchHistory,"watch History fetched successfuly")
+            )
+    } catch (error) {
+        throw new apiError(400, "error in getting watch history: "+error.message);
+    }
+}) 
 export {registerUser,
         loginUser,
         logoutUser,
@@ -497,5 +496,6 @@ export {registerUser,
         updateAccountDetails,
         updateUserAvatar,
         updateUserCoverImage,
-        getChannelDetails
+        getChannelDetails,
+        getWatchHistory
     }
