@@ -316,7 +316,7 @@ const updateUserAvatar = asyncHandler (async (req,res)=>{
             }
         ).select("-password -refreshToken")
     
-        await deleteFromCloudinary(req.user.coverImage.match(/\/upload\/v\d+\/(.+)\.\w+$/)[1]);
+        await deleteFromCloudinary(req.user.coverImage.match(/\/upload\/v\d+\/(.+)\.\w+$/)[1],"image");
         res
             .status(200)
             .json(
@@ -349,7 +349,7 @@ const updateUserCoverImage = asyncHandler (async (req,res)=>{
             }
         ).select("-password -refreshToken")
         
-        await deleteFromCloudinary(req.user.coverImage.match(/\/upload\/v\d+\/(.+)\.\w+$/)[1]);
+        await deleteFromCloudinary(req.user.coverImage.match(/\/upload\/v\d+\/(.+)\.\w+$/)[1],"image");
         res
             .status(200)
             .json(

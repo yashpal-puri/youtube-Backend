@@ -7,8 +7,7 @@ const videoSchema = new Schema({
         required: true,
     },    
     thumbnail: { 
-        type: String, //cloudinary url
-        required: true,
+        type: String, //cloudinary url        
     },
     owner: {
         type: Schema.Types.ObjectId,
